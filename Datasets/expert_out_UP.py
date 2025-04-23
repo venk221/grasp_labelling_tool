@@ -1,0 +1,78 @@
+'''
+Updated to use experts name in reading the files.
+'''
+
+import os
+import glob
+import pickle
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+
+class ExpertOutDataset(Dataset):
+    def __init__(self, expert_out_dirs, start=0.0, end=1.0,exp_names=None):
+        self.__expert_out_dirs = expert_out_dirs
+        self.__start = start
+        self.__end = end
+
+        # Read the expert names and use them for blacklisting
+        if exp_names is not None:
+            self.__expert_names = []
+            for expert in exp_names.split(','):
+                self.__expert_names.append(int(expert))
+        else:
+            self.__expert_names = open(os.path.join(self.__expert_out_dirs, 'experts.txt')).read().split(',')
+        
+        print(f'Loading dataset containing output of {self.__expert_names}')
+        # Setup files for loading
+        self.__data = []
+        for idx in range(len(glob.glob(os.path.join(self.__expert_out_dirs, '*', 'gt_pos.npy')))):
+            # Store them here
+            self.__data.append({'experts': [], 'x': None, 'y': None, 'grasps': None})
+
+            # First, load the input data
+            self.__data[-1]['x'] = os.path.join(self.__expert_out_dirs, idx, 'data.npy')
+
+            # Second, load the ground truth data
+            self.__data[-1]['y'] = [os.path.join(self.__expert_out_dirs, idx, 'gt_pos.npy'),
+                                    os.path.join(self.__expert_out_dirs, idx, 'gt_sin.npy'),
+                                    os.path.join(self.__expert_out_dirs, idx, 'gt_cos.npy'),
+                                    os.path.join(self.__expert_out_dirs, idx, 'gt_wid.npy')]
+
+            # Third, load the grasp data
+            self.__data[-1]['grasps'] = os.path.join(self.__expert_out_dirs, idx, 'gt_gsp.pickle')
+
+            # Finally, load the expert data based on the experts list
+            for exp_name in self.__expert_names:
+                self.__data[-1]['experts'].append(
+                    {'q': os.path.join(self.__expert_out_dirs, idx, f'{exp_name}_q.npy'),
+                     'a': os.path.join(self.__expert_out_dirs, idx, f'{exp_name}_a.npy'),
+                     'w': os.path.join(self.__expert_out_dirs, idx, f'{exp_name}_w.npy')})
+            
+        # Trim according to the start and end splits
+        self.__data = self.__data[int(len(self.__data) * self.__start): int(len(self.__data) * self.__end)]
+        print(f'Created expert dataset of size {len(self.__data)}')
+
+    def __len__(self):
+        return len(self.__data)
+
+    def __getitem__(self, idx):
+        data = self.__data[idx]
+        # Combine expert and input data into one large tensor
+        # This tensor has dimensions (x channels + expert_count * 3)
+        img = np.load(data['x'])
+        image_size = img.shape[1:]
+        expert_tensor = torch.zeros((img.shape[0] + len(data['experts']) * 3, *image_size), dtype=torch.float32)
+        for expert_idx in range(len(data['experts'])):
+            expert_tensor[expert_idx * 3 + 0] = torch.from_numpy(np.load(data['experts'][expert_idx]['q']))
+            expert_tensor[expert_idx * 3 + 1] = torch.from_numpy(np.load(data['experts'][expert_idx]['a']))
+            expert_tensor[expert_idx * 3 + 2] = torch.from_numpy(np.load(data['experts'][expert_idx]['w']))
+        expert_tensor[-img.shape[0]:] = torch.from_numpy(img)
+
+        y = [np.load(f) for f in data['y']]
+
+        # Return input and ground truth data
+        return expert_tensor, y, idx
+
+    def get_grasps(self, idx):
+        return pickle.load(open(self.__data[idx]['grasps'], 'rb'))
