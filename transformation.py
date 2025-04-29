@@ -3,10 +3,10 @@
 # from scipy.spatial.transform import Rotation
 
 # # File paths
-# poses_ = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
-# img_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_rgb.png"
-# depth_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_depth.tiff"
-# grasps_file = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_rgb.png_grasps.txt"
+# poses_ = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
+# img_path = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_rgb.png"
+# depth_path = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_depth.tiff"
+# grasps_file = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/0_rgb.png_grasps.txt"
 
 # # Read file lines
 # def read_file_lines(filepath):
@@ -164,10 +164,10 @@
 #         "depth_normalized": depth_normalized
 #     }
 
-# poses_ = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
-# img_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
-# grasps_file = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
-# poses_ = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
+# poses_ = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
+# img_path = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
+# grasps_file = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
+# poses_ = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
 
 # def read_file_lines(filepath):
 #     with open(filepath, 'r') as file:
@@ -288,6 +288,12 @@ def analyze_depth_image(depth_path):
         print("No distinct object found in the depth image")
         object_center = None
     
+    if object_center is not None:
+        plt.plot(object_center[0], object_center[1], 'ro', markersize=10)
+    
+    plt.tight_layout()
+    plt.savefig("depth_analysis.png")
+    print("Saved visualization to depth_analysis.png")
     
     return {
         "min_depth": min_depth,
@@ -300,6 +306,7 @@ def analyze_depth_image(depth_path):
 poses_ = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/poses.txt"
 img_path = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
 grasps_file = "/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/"
+
 def read_file_lines(filepath):
     with open(filepath, 'r') as file:
         lines = file.readlines()
@@ -312,10 +319,16 @@ depth_images.sort()
 grasps_files = glob.glob(os.path.join(img_path, "*_rgb.png_grasps.txt"))
 grasps_files.sort()
 
-R_c = np.array([[1, 0, 0],
-                [0, 0, -1],
-                [0, 1, 0]])
-T_c = np.array([0, 0, 6])
+# Camera extrinsics (corrected for top-down view)
+R_c = np.array([[2.22044605e-16, 0, 1],
+                [0, 1, 0],
+                [-1, 0, 2.22044605e-16]])
+T_c = np.array([0, 0, 5.5])
+
+# Intrinsic matrix
+K = np.array([[2443.331, 0, 512],
+              [0, 2443.331, 512],
+              [0, 0, 1]])
 
 for idx, (rgb_img_path, depth_img_path, grasp_file, ori) in enumerate(zip(rgb_images, depth_images, grasps_files, read_file_lines(poses_))):
     print(f"Found {grasp_file} grasp file.")
@@ -336,63 +349,70 @@ for idx, (rgb_img_path, depth_img_path, grasp_file, ori) in enumerate(zip(rgb_im
     img_center = rgb_img.shape[1] // 2, rgb_img.shape[0] // 2
     print(f"Image center: {img_center}")
 
-
+    # Verify image resolution matches intrinsic matrix
     height, width = rgb_img.shape[:2]
-    horizontal_aperture = 20.955 
-    focal_length = 5.0 
-    fov = 2 * np.arctan(horizontal_aperture / (2 * focal_length))
-    f_x = (width / 2) #/ np.tan(fov / 2)
-    f_y = f_x  
-    c_x, c_y = width / 2, height / 2
-    K = np.array([[f_x, 0, c_x],
-                  [0, f_y, c_y],
-                  [0, 0, 1]])
-    
+    expected_width = int(K[0, 2] * 2)  # c_x = width/2
+    expected_height = int(K[1, 2] * 2)  # c_y = height/2
+    if width != expected_width or height != expected_height:
+        print(f"Warning: Image resolution {width}x{height} does not match expected {expected_width}x{expected_height} from intrinsic matrix")
 
+    # Banana's world-frame position
     P_w = np.array([world_x, world_y, world_z])
     
+    # Transform to camera frame
     P_c = R_c @ P_w + T_c
     
-    R_obj = Rotation.from_euler('zyx', [world_r, world_p, world_yaw], degrees=True).as_matrix()
+    # Banana's orientation in world frame
+    R_obj = Rotation.from_euler('xyz', [world_r, world_p, world_yaw], degrees=True).as_matrix()
     
+    # Transform orientation to camera frame
     R_obj_cam = R_c @ R_obj
-
+    
+    # Convert back to Euler angles in camera frame (for reference)
     euler_angles_cam = Rotation.from_matrix(R_obj_cam).as_euler('zyx', degrees=True)
     roll_cam, pitch_cam, yaw_cam = euler_angles_cam
     print(f"Euler angles in camera frame: roll={roll_cam:.2f}, pitch={pitch_cam:.2f}, yaw={yaw_cam:.2f} degrees")
-
+    
+    # Project the center to verify alignment (optional, for debugging)
     P_img = K @ P_c
     P_img /= P_img[2]
     projected_u, projected_v = int(P_img[0]), int(P_img[1])
-
+    
+    # Use object_center from depth analysis as the starting point
     u, v = int(object_center[0]), int(object_center[1])
-
-    depth = P_c[2] 
-    axis_length_pixels = 50 
-    axis_length_meters = (axis_length_pixels / f_x) * depth 
-
+    
+    # Compute scaling factor to map physical axis length to pixels
+    depth = P_c[2]  # z-coordinate in camera frame
+    axis_length_pixels = 50  # Length in pixels in the image plane
+    axis_length_meters = (axis_length_pixels / K[0, 0]) * depth  # Convert pixel length to meters at this depth
+    
+    # Define axes in banana's local frame (in meters) - only X and Y
     axes = {
         'x': np.array([axis_length_meters, 0, 0]),  # X-axis (roll)
         'y': np.array([0, axis_length_meters, 0]),  # Y-axis (pitch)
-        'z': np.array([0, 0, axis_length_meters])   # Z-axis (yaw)
+        # Omit Z-axis since it projects to a point
     }
     
-
+    # Transform axes to camera frame and project
     for axis_name, axis_vec in axes.items():
-
+        # Transform axis to camera frame
         axis_cam = P_c + R_obj_cam @ axis_vec
-
+        # Project to image
         axis_img = K @ axis_cam
         axis_img /= axis_img[2]
-        axis_u, axis_v = int(axis_img[0]), int(axis_img[1])
-        color = (255, 0, 0) if axis_name == 'x' else (0, 255, 0) if axis_name == 'y' else (0, 0, 255)
+        axis_u, axis_v = int(axis_img[0]), int(axis_img[1])  # Fixed typo here
+        
+        # Draw axis
+        color = (255, 0, 0) if axis_name == 'x' else (0, 255, 0)
         cv2.line(rgb_img, (u, v), (axis_u, axis_v), color, 2)
     
-
-    cv2.circle(rgb_img, (u, v), 5, (0, 255, 255), -1) 
+    # Draw the object center (from depth analysis)
+    cv2.circle(rgb_img, (u, v), 5, (0, 255, 255), -1)  # Yellow dot at object center
     
-    cv2.circle(rgb_img, (projected_u, projected_v), 5, (255, 0, 0), -1)
+    # Draw the projected world-frame position (for debugging)
+    cv2.circle(rgb_img, (projected_u, projected_v), 5, (255, 0, 0), -1)  # Red dot at projected center
     
+    # Draw grasp center
     for grasp in read_file_lines(grasp_file):
         values = grasp.split()
         center_x, center_y = float(values[-5]), float(values[-4])
@@ -400,8 +420,9 @@ for idx, (rgb_img_path, depth_img_path, grasp_file, ori) in enumerate(zip(rgb_im
         width = float(values[-2])
         height = float(values[-1])
         print(f"center_x = {center_x}, center_y = {center_y}, angle = {angle}, width = {width}, height= {height}")
-        cv2.circle(rgb_img, (int(center_x), int(center_y)), 5, (255, 0, 255), -1) 
-
-    output_path = os.path.join("/home/venk/Downloads/grasp_annotations/transformation_imgs", f"image_{idx}_with_axes.png")
-    cv2.imwrite(f"image_{idx}_with_axes.png", rgb_img)
+        cv2.circle(rgb_img, (int(center_x), int(center_y)), 5, (255, 0, 255), -1)  # Magenta dot at grasp center
+    
+    # Save the image with axes
+    output_path = os.path.join(img_path, f"image_{idx}_with_axes.png")
+    cv2.imwrite(output_path, rgb_img)
     print(f"Saved image with axes to {output_path}")
