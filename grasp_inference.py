@@ -144,9 +144,7 @@ def predict_grasps_for_image(image_data, model_path, model_type='cornell'):
             if processed_image.shape[1] != 4:
                 print(f"[ERROR] Model {model_name} requires RGB+Depth (4 channels), but got shape: {processed_image.shape}")
                 return []
-        # else:
-        #     print(f"Working on {model_name}")
-
+        
         grasps = run_inference(model, processed_image)
 
         grasp_list.extend(grasps)

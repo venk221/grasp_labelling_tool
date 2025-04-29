@@ -268,6 +268,7 @@ class Canvas(QWidget):
                             if shape.selected():
                                 break
             else:
+                selected_shape = None
                 for shape in reversed(self.shapes):
                     assert isinstance(shape, GraspRect)
                     if not shape.visible():
@@ -277,9 +278,21 @@ class Canvas(QWidget):
                     elif e.button() == Qt.RightButton:
                         shape.checkPosAndSelect(painter_pos, shape_only=True)
                     if shape.selectedAnything():
+                        selected_shape = shape
                         self._resetSelectedExcept(shape)
                         self._resetHoveringExcept(shape)
                         break
+                if selected_shape and e.button() == Qt.LeftButton:
+                    grasp = selected_shape.grasp()
+                    info = (
+                        f"Grasp ID: {selected_shape.id()}\n"
+                        f"Center: ({grasp.center[0]:.2f}, {grasp.center[1]:.2f})\n"
+                        f"Angle: {np.degrees(grasp.angle):.2f}°\n"
+                        f"Width (gripper_open): {grasp.gripper_open:.2f}\n"
+                        f"Height (gripper_size): {grasp.gripper_size:.2f}"
+                    )
+                    print(f"[INFO] {info}")
+                    # QMessageBox.information(self, "Grasp Information", info)
             self._checkShapesSelectionChangeAndEmit()
         elif self.mode == self.GRADIENT:
             if e.button() == Qt.LeftButton:

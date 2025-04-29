@@ -75,6 +75,7 @@ class FileListWidget(QListView):
 
     def selectNext(self):
         if self.model().rowCount() == 0:
+            print("[INFO] [file_list] No files to select.")
             return None, None
 
         selected = [i.row() for i in self.selectedIndexes()]
@@ -91,12 +92,14 @@ class FileListWidget(QListView):
         index = self.model().index(next_select, 0)
         selection.select(index, index)
 
-        self.selectionModel().select(self.selectionModel().selection(), QItemSelectionModel.Deselect)
+        self.selectionModel().clearSelection()
         self.selectionModel().select(selection, QItemSelectionModel.Select)
+        print(f"[INFO] [file_list] Selected next file: index={next_select}")
         return current_select, next_select
 
     def selectPrev(self):
         if self.model().rowCount() == 0:
+            print("[INFO] [file_list] No files to select.")
             return None, None
 
         selected = [i.row() for i in self.selectedIndexes()]
@@ -113,8 +116,9 @@ class FileListWidget(QListView):
         index = self.model().index(prev_select, 0)
         selection.select(index, index)
 
-        self.selectionModel().select(self.selectionModel().selection(), QItemSelectionModel.Deselect)
+        self.selectionModel().clearSelection()
         self.selectionModel().select(selection, QItemSelectionModel.Select)
+        print(f"[INFO] [file_list] Selected previous file: index={prev_select}")
         return current_select, prev_select
 
     def checkAll(self):

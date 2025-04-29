@@ -41,8 +41,8 @@ def draw_grasp_box(image, center, angle, width=10, height=40, color=(0, 255, 0))
     return box
 
 def main():
-    rgb_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/mug/5_rgb.png"
-    depth_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/mug/5_depth.tiff"
+    rgb_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/5_rgb.png"
+    depth_path = "/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/5_depth.tiff"
     output_dir = "./output"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -94,7 +94,7 @@ def main():
             break
     if selected_contour is None:
         selected_contour = contours[0]  # fallback
-
+    print(f">>> Selected contour: {selected_contour}")
     angle = compute_tangent_at_point(selected_contour, nearest_point)
     print(f">>> Tangent angle: {angle:.2f}°")
 

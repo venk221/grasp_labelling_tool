@@ -15,7 +15,7 @@ from file_list import FileListWidget
 from tool_bar import ToolBar
 import torch
 import random
-from grasp import GraspRect
+from grasp import GraspRect, Grasp
 from grasp_inference import predict_grasps_for_image
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning) 
@@ -208,6 +208,14 @@ class MainWindow(QMainWindow):
             swapped_points[:, 1] = points[:, 0]
             try:
                 gui_grasp = GraspRect(points=swapped_points)
+                current_grasp = gui_grasp.grasp()
+                modified_grasp = Grasp(
+                    center=current_grasp.center,
+                    gripper_size=current_grasp.gripper_size,
+                    gripper_open=15.0, 
+                    angle=current_grasp.angle
+                )
+                gui_grasp.setGrasp(modified_grasp)
                 gui_grasps.append(gui_grasp)
             except Exception as e:
                 print(f"[ERROR] Failed to convert grasp: {e}")
@@ -242,16 +250,17 @@ class MainWindow(QMainWindow):
             print(f"[ERROR] Click position ({x}, {y}) out of bounds for image size ({depth.shape[1]}, {depth.shape[0]})")
             return
         center_depth = float(depth[y, x])
-        print(f"[INFO] Clicked depth value: {center_depth}")
+        # print(f"[INFO] Clicked depth value: {center_depth}")
         mask = np.zeros_like(depth, dtype=np.uint8)
-        mask[(depth > center_depth - 0.1) & (depth < center_depth + 0.1)] = 255  # Relaxed threshold
-        kernel = np.ones((5, 5), np.uint8)  # Larger kernel for robustness
+        mask[(depth > center_depth - 0.01) & (depth < center_depth + 0.01)] = 255  # Relaxed threshold
+        kernel = np.ones((3, 3), np.uint8)  # Larger kernel for robustness
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             print("[ERROR] No contours found. Try adjusting depth threshold or click position.")
             return
+        # print(f"[INFO] Found {len(contours)} contours.")
         nearest_point = self.find_nearest_edge_point(contours, (x, y))
         selected_contour = None
         for cnt in contours:
@@ -260,9 +269,12 @@ class MainWindow(QMainWindow):
                 break
         if selected_contour is None:
             selected_contour = contours[0]
+        # print(f"[INFO] Nearest edge point: {nearest_point}")
+        # print(f"[INFO] Selected contour: {selected_contour}")
         angle = self.compute_tangent_at_point(selected_contour, nearest_point)
         angle_rad = np.radians(angle)
-        width, height = 10, 40
+        # print(f"[INFO] Computed angle: {angle_rad:.2f} and in degrees = {np.degrees(angle_rad)}°")
+        width, height = 15, 40
         center = np.array([x, y], dtype=np.float64)
         grasp = GraspRect.from_model_output(
             center=center,
@@ -291,11 +303,16 @@ class MainWindow(QMainWindow):
 
     def compute_tangent_at_point(self, contour, target_point):
         contour = np.squeeze(contour)
+        print(f"[DEBUG] Contour shape: {contour.shape}, target_point: {target_point}")
         idx = np.argmin(np.linalg.norm(contour - target_point, axis=1))
+        print(f"[DEBUG] Nearest index in contour: {idx}")
         prev_idx = (idx - 1) % len(contour)
         next_idx = (idx + 1) % len(contour)
+        print(f"[DEBUG] Previous index: {prev_idx}, Next index: {next_idx}")
         delta = contour[next_idx] - contour[prev_idx]
+        print(f"[DEBUG] Delta vector: {delta}")
         angle = np.degrees(np.arctan2(delta[1], delta[0]))
+        print(f"[DEBUG] Computed angle: {angle}")
         return angle
 
     def rotateGraspClockwise(self):
@@ -311,24 +328,50 @@ class MainWindow(QMainWindow):
     def _reconnectCanvasAndLabel(self):
         self.label_list.reconnectCanvasData(self.canvas.shapes)
 
+    # def _changeFilesSelection(self, selected, deselected):
+    #     assert len(selected) <= 1, "Single selection mode"
+    #     assert len(deselected) <= 1, "Single selection mode"
+    #     if len(deselected):
+    #         print("[INFO] [from_app] Saving current work...")
+    #         current_file = self.image_files[deselected[0]]
+    #         self.results["image_files"][current_file]["shapes"] = self.canvas.exportShapes()
+    #     if len(selected):
+    #         current_file = self.image_files[selected[0]]
+    #         print("[INFO] [from_app] Loading data for image {}...".format(current_file))
+    #         if current_file not in self.results["image_files"]:
+    #             self.canvas.clear()
+    #         else:
+    #             self.canvas.loadShapes(self.results["image_files"][current_file]["shapes"])
+    #         if self.image_folder is not None:
+    #             self.canvas.loadImage(os.path.join(self.image_folder, current_file))
+    #         else:
+    #             self.canvas.loadImage(current_file)
+    #     self.setClean()
     def _changeFilesSelection(self, selected, deselected):
         assert len(selected) <= 1, "Single selection mode"
         assert len(deselected) <= 1, "Single selection mode"
         if len(deselected):
-            print("[INFO] [from_app] Saving current work...")
-            current_file = self.image_files[deselected[0]]
+            deselected_idx = deselected[0] if isinstance(deselected[0], int) else deselected[0].row()
+            print("[INFO] [from_app] Saving current work for deselected index: {}".format(deselected_idx))
+            current_file = self.image_files[deselected_idx]
             self.results["image_files"][current_file]["shapes"] = self.canvas.exportShapes()
         if len(selected):
-            current_file = self.image_files[selected[0]]
-            print("[INFO] [from_app] Loading data for image {}...".format(current_file))
+            selected_idx = selected[0] if isinstance(selected[0], int) else selected[0].row()
+            current_file = self.image_files[selected_idx]
+            print("[INFO] [from_app] Loading data for image {} (index: {})".format(current_file, selected_idx))
             if current_file not in self.results["image_files"]:
+                print("[INFO] [from_app] No shapes found for {}, clearing canvas.".format(current_file))
                 self.canvas.clear()
             else:
+                print("[INFO] [from_app] Loading shapes for {}.".format(current_file))
                 self.canvas.loadShapes(self.results["image_files"][current_file]["shapes"])
-            if self.image_folder is not None:
-                self.canvas.loadImage(os.path.join(self.image_folder, current_file))
+            image_path = os.path.join(self.image_folder, current_file) if self.image_folder else current_file
+            if os.path.exists(image_path):
+                print("[INFO] [from_app] Loading image: {}".format(image_path))
+                self.canvas.loadImage(image_path)
             else:
-                self.canvas.loadImage(current_file)
+                print("[ERROR] [from_app] Image file not found: {}".format(image_path))
+                self.canvas.clear()
         self.setClean()
 
     def _changeFileLabeled(self, index: int, labeled: bool):
@@ -489,15 +532,22 @@ class MainWindow(QMainWindow):
 
     def importDirImages(self, path: str):
         if not path:
+            print("[ERROR] [app] No directory path provided.")
             return
         self.file_list.clear()
         self.canvas.clear()
         self.image_folder = path
         self.image_files = []
         for ext in IMAGE_EXTENTIONS:
-            self.image_files.extend(glob.glob(os.path.join(self.image_folder, "*.{}".format(ext))))
-        self.image_files = [os.path.split(f)[-1] for f in self.image_files]
-        self.image_files.sort()
+            pattern = os.path.join(self.image_folder, f"*.{ext}")
+            files = glob.glob(pattern)
+            print(f"[DEBUG] [app] Found {len(files)} files for extension {ext}: {files}")
+            self.image_files.extend(files)
+        self.image_files = [os.path.split(f)[-1] for f in sorted(self.image_files)]
+        print(f"[DEBUG] [app] Loaded {len(self.image_files)} files: {self.image_files}")
+        if not self.image_files:
+            print("[ERROR] [app] No image files found in directory: {}".format(path))
+            return
         self.file_list.addFiles(self.image_files)
         self.results = {
             "image_folder": path,
@@ -538,8 +588,15 @@ class MainWindow(QMainWindow):
         print("[INFO] [from app] Saving project to {}...".format(path))
         with open(path, "w", encoding="utf-8") as j:
             json.dump(self.results, j, ensure_ascii=False, indent=4)
+            for image_file in self.results["image_files"]:
+                grasp_file_path = os.path.join(self.results["image_folder"], f"{image_file}_grasps.txt")
+                with open(grasp_file_path, "w", encoding="utf-8") as f:
+                    for k,grasps in enumerate(self.results["image_files"][image_file]["shapes"]):
+                        f.write(f"{k}\t{grasps['points']}\t{grasps['center'][0]}\t{grasps['center'][1]}\t{np.degrees(grasps['angle'])}\t{grasps['gripper_open']}\t{grasps['gripper_size']}\n")
+        print("[INFO] [from app] Project saved successfully.")                
         self.setClean()
         return path
+    
 
     def changeOutputDir(self):
         self.output_folder = self.openDirDialog()
