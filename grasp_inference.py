@@ -114,12 +114,12 @@ def predict_grasps_for_image(image_data, model_path, model_type='cornell'):
     grasp_list = []
     """High-level function to load, preprocess, and predict."""
     paths = {
-    "GGCNND_Cornell": "/home/venk/Downloads/LabelGrasp/Experts/Generative/pretrained_weights/cornell/depth/ggcnn_epoch_23_cornell",
-    "GGCNND_Jacquard": "/home/venk/Downloads/LabelGrasp/Experts/Generative/pretrained_weights/jacquard/depth/epoch_34_iou_0.89",
-    "GRCNN_Cornell": "/home/venk/Downloads/LabelGrasp/Experts/Residual/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_30_iou_0.97",
-    "GRCNN_Jacquard": "/home/venk/Downloads/LabelGrasp/Experts/Residual/trained-models/jacquard-rgbd-grconvnet3-drop0-ch32/epoch_48_iou_0.93",
-    "GPNN_Cornell": "/home/venk/Downloads/LabelGrasp/Experts/GPNN/pretrained_models/cornell/epoch_40_iou_0.76",
-    "GPNN_Jacquard": "/home/venk/Downloads/LabelGrasp/Experts/GPNN/pretrained_models/jacquard/epoch_48_iou_0.75"
+    "GGCNND_Cornell": "/home/venk/Downloads/grasp_annotations/Experts/Generative/pretrained_weights/cornell/depth/ggcnn_epoch_23_cornell",
+    "GGCNND_Jacquard": "/home/venk/Downloads/grasp_annotations/Experts/Generative/pretrained_weights/jacquard/depth/epoch_34_iou_0.89",
+    "GRCNN_Cornell": "/home/venk/Downloads/grasp_annotations/Experts/Residual/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_30_iou_0.97",
+    "GRCNN_Jacquard": "/home/venk/Downloads/grasp_annotations/Experts/Residual/trained-models/jacquard-rgbd-grconvnet3-drop0-ch32/epoch_48_iou_0.93",
+    "GPNN_Cornell": "/home/venk/Downloads/grasp_annotations/Experts/GPNN/pretrained_models/cornell/epoch_40_iou_0.76",
+    "GPNN_Jacquard": "/home/venk/Downloads/grasp_annotations/Experts/GPNN/pretrained_models/jacquard/epoch_48_iou_0.75"
     }
     for model_name, model_path in paths.items():
         model = load_model(model_path, model_name)
@@ -153,8 +153,8 @@ def predict_grasps_for_image(image_data, model_path, model_type='cornell'):
 
 
 
-img = cv2.imread('/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/1_rgb.png')
-depth_img = cv2.imread('/home/venk/Downloads/OneDrive_2025-04-16/Isaac Sim Test Set/isaac_sim_grasp_data/banana/1_depth.tiff', cv2.IMREAD_UNCHANGED)
+img = cv2.imread('/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/1_rgb.png')
+depth_img = cv2.imread('/home/venk/Downloads/OneDrive_2025-04-29/Isaac Sim Test Set/isaac_sim_grasp_data/banana/1_depth.tiff', cv2.IMREAD_UNCHANGED)
 depth_norm = depth_img.astype('float32')
 depth_norm = (depth_norm - depth_norm.min()) / (depth_norm.max() - depth_norm.min() + 1e-8)
 depth_norm = depth_norm[..., None]  
