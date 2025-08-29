@@ -97,3 +97,4 @@ The project is organized as follows:
 ##  Acknowledgments
 
 *Cazacu, H. (2022). *LabelGrasp* [GitHub repository]. https://github.com/hhcaz/LabelGrasp
+# grasp_labelling_tool
